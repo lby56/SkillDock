@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>SkillDock · 技能管理器</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="selection.css">
+  <link rel="stylesheet" href="ai.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="brand"><div class="brandmark" aria-hidden="true">S<span></span></div><div class="brand-text"><strong>SkillDock</strong><small>你的技能，尽在一处</small></div></div>
+    <nav id="navigation" aria-label="主导航"></nav>
+    <div class="sidebar-footer">
+      <div class="runtime"><span class="dot"></span><span class="offline">本地运行 · 无需登录</span></div>
+      <div class="scan"><span id="scan-time">正在扫描…</span><button id="refresh" title="重新扫描 · Ctrl+R"></button></div>
+      <div class="version">SkillDock <span id="app-version"></span></div>
+    </div>
+  </aside>
+  <main>
+    <div id="content"><div class="loading-page"><div class="spinner"></div><p>正在发现你的技能…</p></div></div>
+  </main>
+  <dialog id="modal"><div id="modal-content"></div></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="skill-context-menu" role="menu" aria-label="技能快捷操作" hidden></div>
+  <script src="selection.js"></script>
+  <script src="overview.js"></script>
+  <script src="app.js"></script>
+  <script src="ai.js"></script>
+</body>
+</html>

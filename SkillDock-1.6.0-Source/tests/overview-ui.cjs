@@ -1,0 +1,72 @@
+const { _electron: electron } = require('playwright');
+const assert = require('node:assert/strict');
+const { fixture, addSkill, put } = require('./helpers.cjs');
+const { fs, path, readText, tree } = require('../src/files.cjs');
+(async () => {
+  const f = fixture('overview-ui');
+  addSkill(f.manager, 'codex', 'research-helper');
+  put(path.join(f.manager.locations.codex, 'skills/.system/internal/SKILL.md'), '---\nname: internal\ndescription: A system skill\n---\nProtected content.');
+  put(path.join(f.manager.locations.codex, 'plugins/cache/vendor/docs/1/skills/documents/SKILL.md'), '---\nname: documents\ndescription: A plugin skill\n---\nPlugin content.');
+  const cloudPath = path.join(f.manager.locations.claude, 'skills/synced/account/pptx');
+  put(path.join(cloudPath, 'SKILL.md'), '---\nname: pptx\ndescription: A cloud skill\n---\nCloud content.');
+  const cloudDigest = tree(cloudPath).digest;
+  const env = { ...process.env, SKILLDOCK_HOME: f.home, SKILLDOCK_DATA: f.dataDir };
+  delete env.ELECTRON_RUN_AS_NODE;
+  const app = await electron.launch({ executablePath: process.env.SKILLDOCK_TEST_EXE || require('electron'), args: process.env.SKILLDOCK_TEST_EXE ? [] : [path.join(__dirname, '..')], env });
+  const page = await app.firstWindow(), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    await page.waitForSelector('[data-overview-skill="internal"]');
+    assert.equal(await page.locator('.overview-row').count(), 4);
+    const filterCount = key => page.locator(`[data-filter="${key}"] span`).innerText();
+    // pptx is a Claude Code built-in (cloud skill without a manifest): the default rule keeps it in Claude Code only.
+    assert.deepEqual(await Promise.all(['all', 'complete', 'missing', 'disabled'].map(filterCount)), ['4', '1', '3', '0']);
+    assert.equal(await page.locator('[data-overview-skill="pptx"] .tag.claude').count(), 1);
+    assert.equal(await page.locator('[data-overview-skill="pptx"] .overview-cell.excluded').count(), 2);
+    await page.locator('[data-filter="complete"]').click();
+    assert.deepEqual(await page.locator('.overview-row').evaluateAll(rows => rows.map(row => row.dataset.overviewSkill)), ['pptx']);
+    await page.locator('[data-filter="missing"]').click();
+    assert.equal(await page.locator('.overview-row').count(), 3);
+    await page.locator('#search').fill('nothing-matches');
+    assert.equal(await page.locator('#overview-rows .empty').count(), 1);
+    await page.locator('#search').fill('');
+    await page.locator('[data-filter="all"]').click();
+    await page.locator('[data-action="scope-info"]').click();
+    assert.match(await page.locator('#modal .info-list').innerText(), /Codex/);
+    await page.locator('.modal-header [data-action="close-modal"]').click();
+    await page.locator('[data-action="sync-all"]').click();
+    await page.waitForSelector('[data-action="apply-sync"]');
+    assert.equal(await page.locator('.plan-row').count(), 6);
+    assert.match(await page.locator('#modal .modal-body > p').innerText(), /跳过 1 个 Claude Code 自带技能/);
+    await page.locator('[data-action="apply-sync"]').click();
+    await page.waitForFunction(() => !document.querySelector('#modal').open);
+    assert.equal(await page.locator('.overview-cell.missing').count(), 0);
+    assert.equal(await page.locator('.overview-row').count(), 4);
+    assert.equal(fs.existsSync(path.join(f.manager.locations.codex, 'skills/pptx')), false);
+    assert.equal(fs.existsSync(path.join(f.manager.locations.dsh, 'skills/pptx')), false);
+    for (const [name, provider] of [['internal', 'codex'], ['pptx', 'claude'], ['documents', 'codex'], ['research-helper', 'opencode']]) {
+      const selector = `[data-overview-skill="${name}"] [data-provider="${provider}"]`;
+      await page.locator(selector).click();
+      await page.waitForFunction(selector => document.querySelector(selector).getAttribute('aria-checked') === 'false', selector);
+      assert.equal(f.manager.snapshot().catalog.find(group => group.name === name).tools[provider].state.enabled, false);
+    }
+    assert.deepEqual(await Promise.all(['all', 'complete', 'missing', 'disabled'].map(filterCount)), ['4', '4', '0', '4']);
+    await page.locator('[data-filter="disabled"]').click();
+    assert.equal(await page.locator('.overview-row').count(), 4);
+    await page.locator('[data-filter="all"]').click();
+    assert.equal(f.manager.snapshot().catalog.find(group => group.name === 'pptx').tools.opencode.state.enabled, true);
+    assert.equal(JSON.parse(readText(f.manager.configPaths().claude)).skillOverrides['anthropic-skills:pptx'], 'off');
+    assert.equal(tree(cloudPath).digest, cloudDigest);
+    await page.locator('[data-action="sync-all"]').click();
+    await page.waitForSelector('[data-action="apply-sync"]');
+    assert.equal(await page.locator('.plan-row').count(), 0);
+    await page.locator('[data-action="apply-sync"]').click();
+    await page.waitForFunction(() => !document.querySelector('#modal').open);
+    await page.locator('#search').fill('pptx');
+    assert.equal(await page.locator('.overview-row').count(), 1);
+    await page.locator('#search').fill('');
+    await page.screenshot({ path: path.join(__dirname, '../qa/05-overview.png') });
+    assert.deepEqual(errors, []);
+    console.log(JSON.stringify({ passed: true, checks: ['status-filters', 'scope-info', 'builtin-rule', 'union-ui-sync', 'no-duplicates', 'system-toggle', 'cloud-toggle', 'plugin-toggle', 'opencode-independence', 'idempotent-sync', 'search'], packaged: !!process.env.SKILLDOCK_TEST_EXE, errors }));
+  } finally { await app.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

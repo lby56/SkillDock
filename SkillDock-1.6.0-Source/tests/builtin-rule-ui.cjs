@@ -1,0 +1,100 @@
+const { _electron: electron } = require('playwright');
+const assert = require('node:assert/strict');
+const { fixture, addSkill, put } = require('./helpers.cjs');
+const { fs, path, readText, tree, exists } = require('../src/files.cjs');
+const { parseJson } = require('../src/configs.cjs');
+(async () => {
+  const f = fixture('builtin-rule-ui');
+  const account = path.join(f.manager.locations.claude, 'skills/synced/account');
+  const cloud = { docx: 'anthropic', pdf: 'anthropic', mine: 'user' };
+  for (const name of Object.keys(cloud)) put(path.join(account, name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name} from claude.ai\n---\nBody.\n`);
+  put(path.join(account, 'manifest.json'), JSON.stringify({ skills: Object.entries(cloud).map(([name, source]) => ({ skillId: name, name, source })) }));
+  const copy = addSkill(f.manager, 'codex', 'docx', 'Copied earlier by a sync.');
+  addSkill(f.manager, 'codex', 'research');
+  put(path.join(f.manager.locations.codex, 'plugins/cache/vendor/docs/1/skills/pdf/SKILL.md'), '---\nname: pdf\ndescription: Codex plugin\n---\nPlugin.');
+  const cloudDigest = tree(account).digest;
+  const env = { ...process.env, SKILLDOCK_HOME: f.home, SKILLDOCK_DATA: f.dataDir }; delete env.ELECTRON_RUN_AS_NODE;
+  const app = await electron.launch({ executablePath: process.env.SKILLDOCK_TEST_EXE || require('electron'), args: process.env.SKILLDOCK_TEST_EXE ? [] : [path.join(__dirname, '..')], env });
+  const page = await app.firstWindow(), errors = [], checks = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  const pass = message => { checks.push(message); console.log(`PASS ${message}`); };
+  const idle = () => page.waitForFunction(() => !document.body.hasAttribute('aria-busy'));
+  const cell = (name, provider) => page.locator(`[data-overview-skill="${name}"] .overview-cell`).nth(['codex', 'claude', 'opencode', 'dsh'].indexOf(provider));
+  try {
+    await page.waitForSelector('[data-overview-skill="docx"]');
+    assert.match(await page.locator('.rule-banner').innerText(), /1 个副本.*OpenCode 中仍启用 2 个/s);
+    for (const name of ['docx', 'pdf']) assert.equal(await page.locator(`[data-overview-skill="${name}"] .tag.claude`).count(), 1);
+    assert.equal(await page.locator('[data-overview-skill="mine"] .tag.claude').count(), 0);
+    assert.match(await cell('pdf', 'codex').innerText(), /配置启用/);
+    assert.match(await cell('pdf', 'dsh').innerText(), /不同步/);
+    assert.match(await cell('mine', 'dsh').innerText(), /待同步/);
+    await page.screenshot({ path: path.join(__dirname, '../qa/11-builtin-rule-overview.png') });
+    pass('overview marks Claude Code built-ins, shows excluded columns and reports copies that break the rule');
+
+    await page.locator('#navigation [data-route="library"][data-provider="all"]').click();
+    assert.equal(await page.locator('.skill-row[data-skill="docx"] .tag.warn', { hasText: '不应同步' }).count(), 1);
+    assert.equal(await page.locator('.skill-row[data-skill="docx"] .tag.claude').count(), 1);
+    await page.locator('.rule-banner [data-action="builtin-cleanup"]').click();
+    await page.waitForSelector('[data-action="confirm-builtin-cleanup"]');
+    assert.equal(await page.locator('#modal .plan-row').count(), 1);
+    assert.match(await page.locator('#modal .modal-body').innerText(), /docx、pdf/);
+    await page.screenshot({ path: path.join(__dirname, '../qa/12-builtin-cleanup.png') });
+    await page.locator('[data-action="confirm-builtin-cleanup"]').click();
+    await page.waitForFunction(() => !document.querySelector('#modal').open); await idle();
+    assert.equal(exists(copy.path), false);
+    const permissions = parseJson(readText(f.manager.configPaths().opencode)).permission.skill;
+    assert.deepEqual([permissions.docx, permissions.pdf, permissions.mine], ['deny', 'deny', undefined]);
+    assert.equal(exists(f.manager.configPaths().claude), false);
+    assert.equal(tree(account).digest, cloudDigest);
+    assert.equal(await page.locator('.rule-banner').count(), 0);
+    pass('cleanup moves the Codex copy to the recycle bin and disables built-ins in OpenCode only');
+
+    await page.locator('#navigation [data-route="overview"]').click();
+    assert.match(await cell('docx', 'codex').innerText(), /不同步/);
+    assert.match(await cell('docx', 'opencode').innerText(), /已禁用/);
+    assert.match(await cell('pdf', 'codex').innerText(), /配置启用/);
+    await page.locator('[data-action="sync-all"]').click();
+    await page.waitForSelector('[data-action="apply-sync"]');
+    const rows = await page.locator('#modal .plan-row').allInnerTexts();
+    assert.ok(rows.length > 0 && rows.every(text => !/^(docx|pdf)\b/.test(text)));
+    await page.locator('.modal-header [data-action="close-modal"]').click();
+    await page.locator('#navigation [data-route="trash"]').click();
+    await page.waitForSelector('[data-action="restore"]');
+    assert.match(await page.locator('#records').innerText(), /按同步规则移除/);
+    pass('sync all skips built-ins while the recycle bin labels rule removals');
+
+    await page.locator('#navigation [data-route="settings"]').click();
+    assert.match(await page.locator('.rule-status').innerText(), /没有与规则不符/);
+    await page.screenshot({ path: path.join(__dirname, '../qa/13-sync-rules-settings.png') });
+    await page.locator('#rule-keep-builtins').uncheck(); await idle();
+    assert.equal(parseJson(readText(path.join(f.dataDir, 'preferences.json'))).keepClaudeBuiltins, false);
+    await page.locator('#navigation [data-route="overview"]').click();
+    assert.match(await cell('docx', 'codex').innerText(), /待同步/);
+    assert.equal(await page.locator('.tag.claude').count(), 2);
+    await page.locator('[data-action="sync-all"]').click();
+    await page.waitForSelector('[data-action="apply-sync"]');
+    assert.ok((await page.locator('#modal .plan-row').allInnerTexts()).some(text => text.startsWith('docx')));
+    await page.locator('.modal-header [data-action="close-modal"]').click();
+    await page.locator('#navigation [data-route="settings"]').click();
+    await page.locator('#rule-keep-builtins').check(); await idle();
+    pass('the rule can be switched off and on from settings');
+
+    await page.locator('#navigation [data-route="library"][data-provider="all"]').click();
+    await page.locator('.skill-row[data-skill="docx"] .skill-desc').click();
+    await page.locator('[data-action="sync-one"]').click();
+    await page.waitForSelector('[data-quick-target]');
+    assert.equal(await page.locator('[data-quick-target]:checked').count(), 0);
+    assert.match(await page.locator('#modal .note').innerText(), /Claude Code 自带技能/);
+    await page.locator('.modal-header [data-action="close-modal"]').click();
+    pass('quick sync of a built-in preselects no target and explains the rule');
+
+    assert.deepEqual(errors, []);
+    const report = { passed: true, at: new Date().toISOString(), packaged: !!process.env.SKILLDOCK_TEST_EXE, checks, rendererErrors: errors, fixture: f.directory };
+    fs.writeFileSync(path.join(__dirname, '../qa/builtin-rule-ui-report.json'), JSON.stringify(report, null, 2));
+    console.log(JSON.stringify(report));
+  } catch (error) {
+    await page.screenshot({ path: path.join(__dirname, '../qa/builtin-rule-failure.png') }).catch(() => {});
+    throw error;
+  } finally { await app.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

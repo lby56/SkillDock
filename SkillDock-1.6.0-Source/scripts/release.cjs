@@ -1,0 +1,12 @@
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const version = require('../package.json').version;
+const dist = path.join(__dirname, '..', 'dist');
+const source = path.join(dist, `SkillDock-Portable-${version}`);
+const target = path.join(dist, `SkillDock-${version}-Portable-win-x64.zip`);
+execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'create-release.ps1'), '-Source', source, '-Target', target], { windowsHide: true, stdio: 'inherit' });
+const digest = crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex');
+fs.writeFileSync(`${target}.sha256`, `${digest}  ${path.basename(target)}\n`);
+console.log(JSON.stringify({ zip: target, bytes: fs.statSync(target).size, sha256: digest }));

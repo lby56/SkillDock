@@ -1,0 +1,35 @@
+[data-selection-key] { cursor: default; }
+[data-selection-key]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.overview-row.is-selected, .sync-source-list > label.is-selected { background: var(--selected); box-shadow: inset 3px 0 var(--accent); }
+.skill-row.is-selected { background: var(--selected); }
+.overview-row.is-selected:hover, .skill-row.is-selected:hover, .sync-source-list > label.is-selected:hover { background: var(--accent-soft); }
+.selection-guide { color: var(--muted); font-size: 12px; white-space: nowrap; }
+#overview-selection-bar, #selection-container { flex: none; }
+.selection-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 9px 14px; border-top: 1px solid var(--accent-line); background: var(--selected); }
+.selection-bar strong { margin-right: 4px; color: var(--accent-ink); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.selection-bar .btn { height: 28px; padding: 0 10px; font-size: 12px; }
+.selection-bar .btn svg { width: 14px; height: 14px; }
+.selection-bar select { height: 28px; max-width: 150px; font-size: 12px; }
+.selection-bar .subtle { margin-left: auto; }
+.bar-divider { width: 1px; height: 18px; margin: 0 2px; background: var(--accent-line); }
+.batch-provider { display: inline-flex; align-items: center; gap: 6px; margin-right: 2px; color: var(--ink-2); font-size: 12px; }
+.batch-provider .provider-logo { width: 18px; height: 18px; font-size: 10px; }
+.sync-select-hint { color: var(--muted); font-size: 11.5px; }
+#skill-context-menu { position: fixed; z-index: 1000; width: 330px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-pop); }
+#skill-context-menu[hidden] { display: none; }
+.context-heading { display: flex; align-items: center; gap: 8px; padding: 8px 10px 10px; font-size: 13px; }
+.context-heading > svg { width: 15px; height: 15px; color: var(--accent); }
+.context-tool-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 6px 5px 10px; border-radius: 8px; }
+.context-tool-row > span { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
+.context-tool-row > span > svg { width: 20px; height: 18px; color: var(--accent); }
+.context-tool-row > div { display: flex; gap: 4px; }
+.context-tool-row button { height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink-2); font-size: 12px; }
+.context-tool-row button:hover:not(:disabled), .context-command:hover:not(:disabled), #skill-context-menu button:focus-visible { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-ink); outline: none; }
+.context-all-tools { margin-bottom: 4px; background: var(--surface-2); }
+.context-all-tools > span { font-weight: 600; }
+#skill-context-menu button:disabled { opacity: .35; cursor: not-allowed; }
+.context-divider { margin: 6px 4px; border-top: 1px solid var(--line); }
+.context-command { width: 100%; justify-content: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid transparent; border-radius: 6px; color: var(--ink-2); font-size: 12.5px; }
+.context-command kbd { margin-left: auto; }
+.context-command svg { width: 15px; height: 15px; }
+.context-hint { padding: 8px 10px 4px; color: var(--muted); font-size: 11.5px; }

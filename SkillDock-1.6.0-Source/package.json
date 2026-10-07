@@ -1,0 +1,28 @@
+{
+  "name": "skilldock",
+  "version": "1.6.0",
+  "description": "Portable skills manager for Codex, Claude Code, OpenCode and DeepSeek Harness",
+  "main": "src/main.cjs",
+  "author": "Local Tools",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "test:ui": "node tests/ui.cjs",
+    "test:ai-ui": "node tests/ai-ui.cjs",
+    "package": "node scripts/package.cjs",
+    "release": "node scripts/release.cjs",
+    "test:selection": "node tests/selection-ui.cjs"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "jsonc-parser": "^3.3.1",
+    "smol-toml": "^1.4.2",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "44.4.3",
+    "playwright": "^1.55.0"
+  }
+}
